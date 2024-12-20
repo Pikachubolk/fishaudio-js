@@ -1,6 +1,6 @@
 # Fish Audio SDK
 
-JavaScript/TypeScript SDK for https://docs.fish.audio.
+JavaScript/TypeScript SDK for [Fish Audio API](https://docs.fish.audio) - providing Text-to-Speech (TTS) and Automatic Speech Recognition (ASR) capabilities.
 
 ## Install
 
@@ -10,25 +10,21 @@ npm install fish-audio-sdk
 
 ## Usage
 
-Initialize a `Session` to use APIs. All APIs have synchronous and asynchronous versions. If you want to use the asynchronous version of the API, you can use the Promise-based version of each method.
+### Initialize Session
+
+Create a `Session` instance to access the API. You'll need an API key from Fish Audio.
 
 ```typescript
 import { Session } from 'fish-audio-sdk';
 
 const session = new Session("your_api_key");
+// Optionally specify a different base URL
+const customSession = new Session("your_api_key", "https://your-proxy-domain");
 ```
 
-Sometimes, you may need to change our endpoint to another address. You can use:
+### Text to Speech (TTS)
 
-```typescript
-import { Session } from 'fish-audio-sdk';
-
-const session = new Session("your_api_key", {
-  baseUrl: "https://your-proxy-domain"
-});
-```
-
-### Text to speech
+The TTS API supports both streaming and async/await patterns. You can customize various parameters like format, bitrate, and prosody.
 
 ```typescript
 import { Session, TTSRequest } from 'fish-audio-sdk';
@@ -36,134 +32,163 @@ import * as fs from 'fs';
 
 const session = new Session("your_api_key");
 
-// Using streams
-const writeStream = fs.createWriteStream("output.mp3");
-const ttsStream = session.tts(new TTSRequest({ text: "Hello, world!" }));
-ttsStream.pipe(writeStream);
-```
-
-Or use async/await version:
-
-```typescript
-import { Session, TTSRequest } from 'fish-audio-sdk';
-import * as fs from 'fs/promises';
-
-const session = new Session("your_api_key");
-
-async function main() {
-  const chunks = [];
-  for await (const chunk of session.ttsAsync(new TTSRequest({ text: "Hello, world!" }))) {
-    chunks.push(chunk);
-  }
-  await fs.writeFile("output.mp3", Buffer.concat(chunks));
-}
-
-main();
-```
-
-#### Reference Audio
-
-```typescript
-import { TTSRequest } from 'fish-audio-sdk';
-
-new TTSRequest({
+// Basic TTS request
+const request = new TTSRequest({
   text: "Hello, world!",
-  referenceId: "your_model_id"
+  format: "mp3",           // 'wav' | 'pcm' | 'mp3' (default: 'mp3')
+  mp3Bitrate: 128,         // 64 | 128 | 192 (default: 128)
+  chunkLength: 200,        // 100-300 (default: 200)
+  normalize: true,         // default: true
+  latency: "balanced",     // 'normal' | 'balanced' (default: 'balanced')
+  prosody: {
+    speed: 1.0,           // default: 1.0
+    volume: 0.0           // default: 0.0
+  }
 });
+
+// Stream to file
+const writeStream = fs.createWriteStream("output.mp3");
+for await (const chunk of session.tts(request)) {
+  writeStream.write(chunk);
+}
+writeStream.end();
 ```
 
-Or use `ReferenceAudio` in `TTSRequest`:
+### Voice Cloning
+
+You can use reference audio to clone voices:
 
 ```typescript
 import { TTSRequest, ReferenceAudio } from 'fish-audio-sdk';
+import * as fs from 'fs';
 
-new TTSRequest({
+// Using a reference model ID
+const requestWithModelId = new TTSRequest({
+  text: "Hello, world!",
+  referenceId: "your_model_id"
+});
+
+// Using reference audio directly
+const audioBuffer = fs.readFileSync('reference.wav');
+const requestWithAudio = new TTSRequest({
   text: "Hello, world!",
   references: [
     new ReferenceAudio({
-      audio: audioBuffer, // Buffer containing audio data
-      text: "reference audio text"
+      audio: audioBuffer,
+      text: "Reference text that matches the audio"
     })
   ]
 });
 ```
 
-### List models
+### Automatic Speech Recognition (ASR)
+
+Convert audio to text with optional language detection:
 
 ```typescript
-const models = session.listModels();
-console.log(models);
-```
+import { Session } from 'fish-audio-sdk';
+import * as fs from 'fs';
 
-Or use async version:
+const session = new Session("your_api_key");
+const audioBuffer = fs.readFileSync('audio.mp3');
 
-```typescript
-async function main() {
-  const models = await session.listModelsAsync();
-  console.log(models);
-}
-
-main();
-```
-
-### Get a model info by id
-
-```typescript
-const model = session.getModel("your_model_id");
-console.log(model);
-```
-
-Or use async version:
-
-```typescript
-async function main() {
-  const model = await session.getModelAsync("your_model_id");
-  console.log(model);
-}
-
-main();
-```
-
-### Create a model
-
-```typescript
-const model = session.createModel({
-  title: "test",
-  description: "test",
-  voices: [voiceBuffer1, voiceBuffer2], // Buffers containing audio data
-  coverImage: imageBuffer // Buffer containing image data
+const result = await session.asr({
+  audio: audioBuffer,
+  language: "en",              // Optional: specify language
+  ignoreTimestamps: false      // Optional: skip timestamp generation
 });
-console.log(model);
+
+console.log(result.text);      // Full transcription
+console.log(result.duration);  // Audio duration in seconds
+console.log(result.segments);  // Array of {text, start, end} segments
 ```
 
-Or use async version:
+### Model Management
+
+List, create, and manage voice models:
 
 ```typescript
-async function main() {
-  const model = await session.createModelAsync({
-    title: "test",
-    description: "test",
-    voices: [voiceBuffer1, voiceBuffer2],
-    coverImage: imageBuffer
-  });
-  console.log(model);
+import { Session } from 'fish-audio-sdk';
+
+const session = new Session("your_api_key");
+
+// List models with pagination and filters
+const models = await session.getModels({
+  pageSize: 10,
+  pageNumber: 1,
+  title: "search term",
+  tag: ["tag1", "tag2"],
+  self: true,               // Only show your models
+  authorId: "user_id",
+  language: ["en", "zh"],
+  titleLanguage: "en",
+  sortBy: "created_at"      // 'task_count' | 'created_at'
+});
+
+// Get specific model
+const model = await session.getModel("model_id");
+```
+
+### WebSocket Support
+
+For real-time streaming applications, use the WebSocket interface:
+
+```typescript
+import { WebSocketSession, TTSRequest } from 'fish-audio-sdk';
+
+const ws = new WebSocketSession("your_api_key");
+
+async function* textStream() {
+  yield "First chunk of text";
+  yield "Second chunk of text";
+  // ...
 }
 
-main();
-```
+const request = new TTSRequest({ text: "" }); // Initial empty request
 
-### Delete a model
-
-```typescript
-session.deleteModel("your_model_id");
-```
-
-Or use async version:
-
-```typescript
-async function main() {
-  await session.deleteModelAsync("your_model_id");
+// Stream audio chunks as text is processed
+for await (const audioChunk of ws.tts(request, textStream())) {
+  // Process audio chunk
 }
 
-main();
+await ws.close(); // Clean up when done
 ```
+
+### Error Handling
+
+The SDK provides specific error types:
+
+```typescript
+import { HttpCodeError, WebSocketError } from 'fish-audio-sdk';
+
+try {
+  await session.getModel("invalid_id");
+} catch (error) {
+  if (error instanceof HttpCodeError) {
+    console.log(`HTTP Error ${error.status}: ${error.message}`);
+  } else if (error instanceof WebSocketError) {
+    console.log(`WebSocket Error: ${error.message}`);
+  }
+}
+```
+
+### Account Management
+
+Check API credits and package information:
+
+```typescript
+const credits = await session.getApiCredit();
+console.log(`Available credits: ${credits.credit}`);
+
+const package = await session.getPackage();
+console.log(`Package type: ${package.type}`);
+console.log(`Balance: ${package.balance}/${package.total}`);
+```
+
+## License
+
+[License terms]
+
+## Contributing
+
+[Contributing guidelines]
