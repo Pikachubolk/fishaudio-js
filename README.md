@@ -1,183 +1,169 @@
-# Fish Audio Python SDK
+# Fish Audio SDK
 
-To provide convenient Python program integration for https://docs.fish.audio.
+JavaScript/TypeScript SDK for https://docs.fish.audio.
 
 ## Install
 
 ```bash
-pip install fish-audio-sdk
+npm install fish-audio-sdk
 ```
 
 ## Usage
 
-Initialize a `Session` to use APIs. All APIs have synchronous and asynchronous versions. If you want to use the asynchronous version of the API, you only need to rewrite the original `session.api_call(...)` to `session.api_call.awaitable(...)`.
+Initialize a `Session` to use APIs. All APIs have synchronous and asynchronous versions. If you want to use the asynchronous version of the API, you can use the Promise-based version of each method.
 
-```python
-from fish_audio_sdk import Session
+```typescript
+import { Session } from 'fish-audio-sdk';
 
-session = Session("your_api_key")
+const session = new Session("your_api_key");
 ```
 
-Sometimes, you may need to change our endpoint to another address. You can use
+Sometimes, you may need to change our endpoint to another address. You can use:
 
-```python
-from fish_audio_sdk import Session
+```typescript
+import { Session } from 'fish-audio-sdk';
 
-session = Session("your_api_key", base_url="https://your-proxy-domain")
+const session = new Session("your_api_key", {
+  baseUrl: "https://your-proxy-domain"
+});
 ```
 
 ### Text to speech
 
-```python
-from fish_audio_sdk import Session, TTSRequest
+```typescript
+import { Session, TTSRequest } from 'fish-audio-sdk';
+import * as fs from 'fs';
 
-session = Session("your_api_key")
+const session = new Session("your_api_key");
 
-with open("r.mp3", "wb") as f:
-    for chunk in session.tts(TTSRequest(text="Hello, world!")):
-        f.write(chunk)
+// Using streams
+const writeStream = fs.createWriteStream("output.mp3");
+const ttsStream = session.tts(new TTSRequest({ text: "Hello, world!" }));
+ttsStream.pipe(writeStream);
 ```
 
-Or use async version:
+Or use async/await version:
 
-```python
-import asyncio
-import aiofiles
+```typescript
+import { Session, TTSRequest } from 'fish-audio-sdk';
+import * as fs from 'fs/promises';
 
-from fish_audio_sdk import Session, TTSRequest
+const session = new Session("your_api_key");
 
-session = Session("your_api_key")
+async function main() {
+  const chunks = [];
+  for await (const chunk of session.ttsAsync(new TTSRequest({ text: "Hello, world!" }))) {
+    chunks.push(chunk);
+  }
+  await fs.writeFile("output.mp3", Buffer.concat(chunks));
+}
 
-
-async def main():
-    async with aiofiles.open("r.mp3", "wb") as f:
-        async for chunk in session.tts.awaitable(
-            TTSRequest(text="Hello, world!"),
-        ):
-            await f.write(chunk)
-
-
-asyncio.run(main())
+main();
 ```
 
 #### Reference Audio
 
-```python
-from fish_audio_sdk import TTSRequest
+```typescript
+import { TTSRequest } from 'fish-audio-sdk';
 
-TTSRequest(
-    text="Hello, world!",
-    reference_id="your_model_id",
-)
+new TTSRequest({
+  text: "Hello, world!",
+  referenceId: "your_model_id"
+});
 ```
 
-Or just use `ReferenceAudio` in `TTSRequest`:
+Or use `ReferenceAudio` in `TTSRequest`:
 
-```python
-from fish_audio_sdk import TTSRequest, ReferenceAudio
+```typescript
+import { TTSRequest, ReferenceAudio } from 'fish-audio-sdk';
 
-TTSRequest(
-    text="Hello, world!",
-    references=[
-        ReferenceAudio(
-            audio=audio_file.read(),
-            text="reference audio text",
-        )
-    ],
-)
+new TTSRequest({
+  text: "Hello, world!",
+  references: [
+    new ReferenceAudio({
+      audio: audioBuffer, // Buffer containing audio data
+      text: "reference audio text"
+    })
+  ]
+});
 ```
 
 ### List models
 
-```python
-models = session.list_models()
-print(models)
+```typescript
+const models = session.listModels();
+console.log(models);
 ```
 
 Or use async version:
 
-```python
-import asyncio
+```typescript
+async function main() {
+  const models = await session.listModelsAsync();
+  console.log(models);
+}
 
-
-async def main():
-    models = await session.list_models.awaitable()
-    print(models)
-
-
-asyncio.run(main())
+main();
 ```
-
-
 
 ### Get a model info by id
 
-```python
-model = session.get_model("your_model_id")
-print(model)
+```typescript
+const model = session.getModel("your_model_id");
+console.log(model);
 ```
 
 Or use async version:
 
-```python
-import asyncio
+```typescript
+async function main() {
+  const model = await session.getModelAsync("your_model_id");
+  console.log(model);
+}
 
-
-async def main():
-    model = await session.get_model.awaitable("your_model_id")
-    print(model)
-
-
-asyncio.run(main())
+main();
 ```
 
 ### Create a model
 
-```python
-model = session.create_model(
-    title="test",
-    description="test",
-    voices=[voice_file.read(), other_voice_file.read()],
-    cover_image=image_file.read(),
-)
-print(model)
+```typescript
+const model = session.createModel({
+  title: "test",
+  description: "test",
+  voices: [voiceBuffer1, voiceBuffer2], // Buffers containing audio data
+  coverImage: imageBuffer // Buffer containing image data
+});
+console.log(model);
 ```
 
 Or use async version:
 
-```python
-import asyncio
+```typescript
+async function main() {
+  const model = await session.createModelAsync({
+    title: "test",
+    description: "test",
+    voices: [voiceBuffer1, voiceBuffer2],
+    coverImage: imageBuffer
+  });
+  console.log(model);
+}
 
-
-async def main():
-    model = await session.create_model.awaitable(
-        title="test",
-        description="test",
-        voices=[voice_file.read(), other_voice_file.read()],
-        cover_image=image_file.read(),
-    )
-    print(model)
-
-
-asyncio.run(main())
+main();
 ```
-
 
 ### Delete a model
 
-```python
-session.delete_model("your_model_id")
+```typescript
+session.deleteModel("your_model_id");
 ```
 
 Or use async version:
 
-```python
-import asyncio
+```typescript
+async function main() {
+  await session.deleteModelAsync("your_model_id");
+}
 
-
-async def main():
-    await session.delete_model.awaitable("your_model_id")
-
-
-asyncio.run(main())
+main();
 ```
