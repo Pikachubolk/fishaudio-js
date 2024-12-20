@@ -1,6 +1,6 @@
 {
   "name": "fish-audio-sdk",
-  "version": "2024.12.7",
+  "version": "2024.12.8",
   "description": "fish.audio platform api sdk",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

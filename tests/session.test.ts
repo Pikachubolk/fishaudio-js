@@ -1,4 +1,6 @@
 import { Session, TTSRequest, ASRRequest, HttpCodeError } from '../src';
+import * as fs from 'fs';
+import * as path from 'path';
 
 describe('Session', () => {
   let session: Session;
@@ -13,8 +15,7 @@ describe('Session', () => {
 
   it('should perform TTS', async () => {
     const buffer: Buffer[] = [];
-    for await (const chunk of session.tts(TTSRequest.parse({
-      text: 'Hello, world!',
+    for await (const chunk of session.tts(new TTSRequest('Hello, world!', {
       format: 'mp3',
       latency: 'balanced'
     }))) {
@@ -26,8 +27,7 @@ describe('Session', () => {
   it('should perform ASR', async () => {
     // First get audio from TTS
     const buffer: Buffer[] = [];
-    for await (const chunk of session.tts(TTSRequest.parse({
-      text: 'Hello, world!',
+    for await (const chunk of session.tts(new TTSRequest('Hello, world!', {
       format: 'mp3'
     }))) {
       buffer.push(chunk);
@@ -35,16 +35,16 @@ describe('Session', () => {
     
     // Then perform ASR
     const audioBuffer = Buffer.concat(buffer);
-    const result = await session.asr(ASRRequest.parse({
-      audio: audioBuffer,
-      language: 'zh'
-    }));
+    const result = await session.asr(new ASRRequest(
+      audioBuffer,
+      'zh'
+    ));
     
     expect(result.text).toBeTruthy();
   });
 
   it('should list models', async () => {
-    const models = await session.getModels();
+    const models = await session.listModels();
     expect(models.total).toBeGreaterThan(0);
   });
 
@@ -55,17 +55,28 @@ describe('Session', () => {
   });
 
   it('should throw on model not found', async () => {
-    await expect(session.getModel('123')).rejects.toThrow(HttpCodeError);
+    try {
+      await session.getModel('123');
+      fail('Should have thrown an error');
+    } catch (error) {
+      expect(error).toBeInstanceOf(HttpCodeError);
+      expect((error as HttpCodeError).status).toBe(404);
+    }
   });
 
   it('should throw on invalid token', async () => {
     session = new Session('invalid');
-    const generator = session.tts(TTSRequest.parse({
-      text: 'Hello, world!',
+    const generator = session.tts(new TTSRequest('Hello, world!', {
       format: 'mp3'
     }));
     
-    await expect(generator.next()).rejects.toThrow(HttpCodeError);
+    try {
+      await generator.next();
+      fail('Should have thrown an error');
+    } catch (error) {
+      expect(error).toBeInstanceOf(HttpCodeError);
+      expect((error as HttpCodeError).status).toBe(402);
+    }
   });
 
   it('should get API credit', async () => {

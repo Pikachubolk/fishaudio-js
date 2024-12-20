@@ -27,8 +27,7 @@ describe('WebSocketSession', () => {
       return;
     }
 
-    const request = TTSRequest.parse({
-      text: '',
+    const request = new TTSRequest('', {
       format: 'mp3',
       latency: 'balanced'
     });

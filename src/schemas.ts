@@ -1,43 +1,120 @@
 import { z } from 'zod';
 
-export const TTSRequest = z.object({
-  text: z.string(),
-  chunkLength: z.number().min(100).max(300).default(200),
-  format: z.enum(['wav', 'pcm', 'mp3']).default('mp3'),
-  mp3Bitrate: z.number().refine(val => [64, 128, 192].includes(val), {
-    message: 'mp3Bitrate must be one of: 64, 128, 192'
-  }).default(128),
-  references: z.array(z.object({
-    audio: z.instanceof(Buffer),
-    text: z.string()
-  })).default([]),
-  referenceId: z.string().optional(),
-  normalize: z.boolean().default(true),
-  latency: z.enum(['normal', 'balanced']).default('balanced'),
-  prosody: z.object({
-    speed: z.number().default(1.0),
-    volume: z.number().default(0.0)
-  }).optional()
-});
-
-export type TTSRequestType = z.infer<typeof TTSRequest>;
-
-export interface ASRRequestType {
-  audio: Buffer;
-  language?: string;
-  ignoreTimestamps?: boolean;
-}
-
 export interface ASRSegment {
   text: string;
   start: number;
   end: number;
 }
 
-export interface ASRResponse {
-  text: string;
-  duration: number;
-  segments: ASRSegment[];
+export interface TTSRequestOptions {
+  chunkLength?: number;
+  format?: 'wav' | 'pcm' | 'mp3';
+  mp3Bitrate?: 64 | 128 | 192;
+  references?: ReferenceAudio[];
+  referenceId?: string;
+  normalize?: boolean;
+  latency?: 'normal' | 'balanced';
+  prosody?: {
+    speed: number;
+    volume: number;
+  };
+}
+
+export class ReferenceAudio {
+  constructor(public audio: Buffer, public text: string) {}
+
+  toJSON() {
+    return {
+      audio: this.audio,
+      text: this.text
+    };
+  }
+}
+
+export class TTSRequest {
+  public chunkLength: number;
+  public format: 'wav' | 'pcm' | 'mp3';
+  public mp3Bitrate: 64 | 128 | 192;
+  public references: ReferenceAudio[];
+  public referenceId?: string;
+  public normalize: boolean;
+  public latency: 'normal' | 'balanced';
+  public prosody?: { speed: number; volume: number };
+
+  constructor(public text: string, options: Partial<TTSRequestOptions> = {}) {
+    this.chunkLength = options.chunkLength ?? 200;
+    this.format = options.format ?? 'mp3';
+    this.mp3Bitrate = options.mp3Bitrate ?? 128;
+    this.references = options.references ?? [];
+    this.referenceId = options.referenceId;
+    this.normalize = options.normalize ?? true;
+    this.latency = options.latency ?? 'balanced';
+    this.prosody = options.prosody;
+  }
+
+  toJSON() {
+    return {
+      text: this.text,
+      chunk_length: this.chunkLength,
+      format: this.format,
+      mp3_bitrate: this.mp3Bitrate,
+      references: this.references,
+      reference_id: this.referenceId,
+      normalize: this.normalize,
+      latency: this.latency,
+      prosody: this.prosody
+    };
+  }
+}
+
+export class ASRRequest {
+  constructor(
+    public audio: Buffer,
+    public language?: string,
+    public ignoreTimestamps?: boolean
+  ) {}
+
+  toJSON() {
+    return {
+      audio: this.audio,
+      language: this.language,
+      ignore_timestamps: this.ignoreTimestamps
+    };
+  }
+}
+
+export class ASRResponse {
+  constructor(
+    public text: string,
+    public duration: number,
+    public segments: ASRSegment[]
+  ) {}
+
+  static fromJSON(data: any): ASRResponse {
+    return new ASRResponse(
+      data.text,
+      data.duration,
+      data.segments.map((s: any) => ({
+        text: s.text,
+        start: s.start,
+        end: s.end
+      }))
+    );
+  }
+}
+
+export class PaginatedResponse<T> {
+  constructor(
+    public total: number,
+    public items: T[]
+  ) {}
+
+  static fromJSON<T>(data: any): PaginatedResponse<T> {
+    return new PaginatedResponse(
+      data.total,
+      data.items
+    );
+  }
 }
 
 export interface APICreditEntity {
@@ -57,17 +134,6 @@ export interface PackageEntity {
   created_at: string;
   updated_at: string;
   finished_at: string;
-}
-
-export const ASRRequest = z.object({
-  audio: z.instanceof(Buffer),
-  language: z.string().optional(),
-  ignoreTimestamps: z.boolean().optional()
-});
-
-export interface PaginatedResponse<T> {
-  total: number;
-  items: T[];
 }
 
 export interface ModelEntity {
