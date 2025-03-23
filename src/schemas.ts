@@ -8,10 +8,13 @@ export interface ASRSegment {
 
 export interface TTSRequestOptions {
   chunkLength?: number;
-  format?: 'wav' | 'pcm' | 'mp3';
+  format?: 'wav' | 'pcm' | 'mp3' | 'opus';
   mp3Bitrate?: 64 | 128 | 192;
+  opusBitrate?: -1000 | 24 | 32 | 48 | 64;
+  sampleRate?: number;
   references?: ReferenceAudio[];
   referenceId?: string;
+  modelId?: string;
   normalize?: boolean;
   latency?: 'normal' | 'balanced';
   prosody?: {
@@ -33,10 +36,13 @@ export class ReferenceAudio {
 
 export class TTSRequest {
   public chunkLength: number;
-  public format: 'wav' | 'pcm' | 'mp3';
+  public format: 'wav' | 'pcm' | 'mp3' | 'opus';
   public mp3Bitrate: 64 | 128 | 192;
+  public opusBitrate?: -1000 | 24 | 32 | 48 | 64;
+  public sampleRate?: number;
   public references: ReferenceAudio[];
   public referenceId?: string;
+  public modelId?: string;
   public normalize: boolean;
   public latency: 'normal' | 'balanced';
   public prosody?: { speed: number; volume: number };
@@ -45,8 +51,11 @@ export class TTSRequest {
     this.chunkLength = options.chunkLength ?? 200;
     this.format = options.format ?? 'mp3';
     this.mp3Bitrate = options.mp3Bitrate ?? 128;
+    this.opusBitrate = options.opusBitrate;
+    this.sampleRate = options.sampleRate;
     this.references = options.references ?? [];
     this.referenceId = options.referenceId;
+    this.modelId = options.modelId;
     this.normalize = options.normalize ?? true;
     this.latency = options.latency ?? 'balanced';
     this.prosody = options.prosody;
@@ -58,8 +67,11 @@ export class TTSRequest {
       chunk_length: this.chunkLength,
       format: this.format,
       mp3_bitrate: this.mp3Bitrate,
+      opus_bitrate: this.opusBitrate,
+      sample_rate: this.sampleRate,
       references: this.references,
       reference_id: this.referenceId,
+      model_id: this.modelId,
       normalize: this.normalize,
       latency: this.latency,
       prosody: this.prosody
@@ -123,6 +135,8 @@ export interface APICreditEntity {
   credit: number;
   created_at: string;
   updated_at: string;
+  has_phone_sha256?: boolean;
+  has_free_credit?: boolean;
 }
 
 export interface PackageEntity {
@@ -155,6 +169,7 @@ export interface ModelEntity {
   mark_count: number;
   shared_count: number;
   task_count: number;
+  unliked?: boolean;
   liked: boolean;
   marked: boolean;
   author: AuthorEntity;
@@ -171,6 +186,45 @@ export interface AuthorEntity {
   id: string;
   username: string;
   avatar: string;
+  nickname?: string;
+}
+
+export interface ModelListParams {
+  pageSize?: number;
+  pageNumber?: number;
+  title?: string;
+  tag?: string | string[];
+  self?: boolean;
+  authorId?: string;
+  language?: string | string[];
+  titleLanguage?: string;
+  type?: 'svc' | 'tts';
+  sortBy?: 'score' | 'task_count' | 'created_at';
+}
+
+export interface ModelCreateParams {
+  visibility?: 'public' | 'unlist' | 'private';
+  type?: 'tts';
+  title: string;
+  description?: string;
+  coverImage?: Buffer;
+  trainMode?: 'fast';
+  voices: Buffer[];
+  texts?: string[];
+  tags?: string[];
+  enhanceAudioQuality?: boolean;
+}
+
+export interface ModelUpdateParams {
+  title?: string;
+  description?: string;
+  coverImage?: Buffer;
+  visibility?: 'public' | 'unlist' | 'private';
+  tags?: string[];
+}
+
+export interface ApiCreditParams {
+  checkFreeCredit?: boolean;
 }
 
 // Similar schema definitions for other types... 

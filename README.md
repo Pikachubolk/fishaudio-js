@@ -24,7 +24,7 @@ You can change the endpoint if needed:
 const session = new Session("your_api_key", "https://your-proxy-domain");
 ```
 
-### Text to Speech
+## Text to Speech (TTS)
 
 ```typescript
 import { Session, TTSRequest } from 'fish-audio-sdk';
@@ -39,43 +39,50 @@ for await (const chunk of session.tts(new TTSRequest("Hello, world!"))) {
 }
 writeStream.end();
 
-// With options
+// With advanced options
 const request = new TTSRequest("Hello, world!", {
-  format: "mp3",           // 'wav' | 'pcm' | 'mp3'
+  format: "mp3",           // 'wav' | 'pcm' | 'mp3' | 'opus'
   mp3Bitrate: 128,         // 64 | 128 | 192
   chunkLength: 200,        // 100-300
   normalize: true,         // Audio normalization
   latency: "balanced",     // 'normal' | 'balanced'
+  referenceId: "model_id", // Use a specific trained model
   prosody: {
-    speed: 1.0,           // Speech speed
-    volume: 0.0           // Volume adjustment
+    speed: 1.0,            // Speech speed
+    volume: 0.0            // Volume adjustment
   }
 });
 ```
 
-### Voice Training
+## Real-time TTS with WebSocket
 
-You can train new voice models using reference audio:
+For streaming text-to-speech in real-time:
 
 ```typescript
-import { Session } from 'fish-audio-sdk';
-import * as fs from 'fs';
+import { WebSocketSession, TTSRequest } from 'fish-audio-sdk';
 
-const session = new Session("your_api_key");
+const ws = new WebSocketSession("your_api_key");
 
-// Create a new voice model
-const voiceData = fs.readFileSync('voice_sample.wav');
-const model = await session.createModel({
-  title: "My Voice Model",
-  description: "Custom voice model",
-  voices: [voiceData],
-  texts: ["Text matching the voice sample"],
-  tags: ["custom", "voice"],
-  enhanceAudioQuality: true
+async function* textStream() {
+  yield "First chunk of text";
+  yield "Second chunk of text";
+  // ...
+}
+
+const request = new TTSRequest("", {
+  format: "mp3",
+  latency: "balanced"
 });
+
+// Stream audio chunks as text is processed
+for await (const audioChunk of ws.tts(request, textStream())) {
+  // Process audio chunk
+}
+
+await ws.close(); // Clean up when done
 ```
 
-### Automatic Speech Recognition (ASR)
+## Automatic Speech Recognition (ASR)
 
 Convert audio to text with optional language detection:
 
@@ -97,15 +104,36 @@ console.log(result.duration);  // Audio duration in seconds
 console.log(result.segments);  // Array of {text, start, end} segments
 ```
 
-### Model Management
+## Voice Cloning and Model Management
 
-List, get, and manage voice models:
+### Create Voice Models
 
 ```typescript
 import { Session } from 'fish-audio-sdk';
+import * as fs from 'fs';
 
 const session = new Session("your_api_key");
 
+// Create a new voice model
+const voiceData = fs.readFileSync('voice_sample.wav');
+const model = await session.createModel({
+  title: "My Voice Model",
+  description: "Custom voice model",
+  voices: [voiceData],
+  texts: ["Text matching the voice sample"],
+  tags: ["custom", "voice"],
+  enhanceAudioQuality: true,
+  visibility: "private", // 'public' | 'unlist' | 'private'
+  type: "tts",
+  trainMode: "fast"
+});
+
+console.log(`Model created with ID: ${model.id}`);
+```
+
+### List and Filter Models
+
+```typescript
 // List models with pagination and filters
 const models = await session.listModels({
   pageSize: 10,
@@ -116,13 +144,23 @@ const models = await session.listModels({
   authorId: "user_id",
   language: ["en", "zh"],
   titleLanguage: "en",
-  sortBy: "created_at"      // 'task_count' | 'created_at'
+  sortBy: "created_at"      // 'score' | 'task_count' | 'created_at'
 });
 
-// Get specific model
-const model = await session.getModel("model_id");
+console.log(`Found ${models.total} models`);
+models.items.forEach(model => {
+  console.log(`- ${model.title} (ID: ${model.id})`);
+});
+```
 
-// Update model
+### Manage Models
+
+```typescript
+// Get specific model details
+const model = await session.getModel("model_id");
+console.log(model);
+
+// Update model properties
 await session.updateModel("model_id", {
   title: "Updated Title",
   description: "New description",
@@ -134,32 +172,25 @@ await session.updateModel("model_id", {
 await session.deleteModel("model_id");
 ```
 
-### Real-time TTS with WebSocket
+## Account and Wallet Management
 
-For streaming text-to-speech in real-time:
+Check API credits and package information:
 
 ```typescript
-import { WebSocketSession, TTSRequest } from 'fish-audio-sdk';
+// Get API credit information
+const credits = await session.getApiCredit();
+console.log(`Available credits: ${credits.credit}`);
+console.log(`Has free credit: ${credits.has_free_credit}`);
+console.log(`Has phone verified: ${credits.has_phone_sha256}`);
 
-const ws = new WebSocketSession("your_api_key");
-
-async function* textStream() {
-  yield "First chunk of text";
-  yield "Second chunk of text";
-  // ...
-}
-
-const request = new TTSRequest(""); // Initial empty request
-
-// Stream audio chunks as text is processed
-for await (const audioChunk of ws.tts(request, textStream())) {
-  // Process audio chunk
-}
-
-await ws.close(); // Clean up when done
+// Get premium package information
+const package = await session.getPackage();
+console.log(`Package type: ${package.type}`);
+console.log(`Balance: ${package.balance}/${package.total}`);
+console.log(`Expires: ${package.finished_at}`);
 ```
 
-### Error Handling
+## Error Handling
 
 The SDK provides specific error types:
 
@@ -177,23 +208,21 @@ try {
 }
 ```
 
-### Account Management
+## Supported Audio Formats
 
-Check API credits and package information:
+### Input (for ASR)
+- WAV/PCM (16-bit, mono)
+- MP3 (mono)
 
-```typescript
-const credits = await session.getApiCredit();
-console.log(`Available credits: ${credits.credit}`);
-
-const package = await session.getPackage();
-console.log(`Package type: ${package.type}`);
-console.log(`Balance: ${package.balance}/${package.total}`);
-```
+### Output (for TTS)
+- WAV/PCM (Sample rates: 8kHz, 16kHz, 24kHz, 32kHz, 44.1kHz - default: 44.1kHz)
+- MP3 (Sample rates: 32kHz, 44.1kHz - default: 44.1kHz, Bitrates: 64kbps, 128kbps, 192kbps)
+- Opus (Sample rate: 48kHz, Bitrates: -1000 (auto), 24kbps, 32kbps, 48kbps, 64kbps)
 
 ## License
 
-[License terms]
+MIT
 
 ## Contributing
 
-[Contributing guidelines]
+Contributions are welcome! Please feel free to submit a Pull Request.

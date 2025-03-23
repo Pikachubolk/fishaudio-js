@@ -1,18 +1,28 @@
-import axios, { AxiosError } from 'axios';
-import { TTSRequest, ASRRequest, ModelEntity, PaginatedResponse, APICreditEntity, PackageEntity, ASRResponse } from './schemas';
+import axios, { AxiosError, AxiosInstance } from 'axios';
+import { TTSRequest, ASRRequest, ModelEntity, PaginatedResponse, APICreditEntity, PackageEntity, ASRResponse, ModelListParams, ModelCreateParams, ModelUpdateParams, ApiCreditParams } from './schemas';
 import { HttpCodeError } from './exceptions';
 import msgpack from 'msgpack-lite';
+import { Agent as HttpAgent } from 'http';
+import { Agent as HttpsAgent } from 'https';
 
 export class Session {
-  private client: ReturnType<typeof axios.create>;
+  private client: AxiosInstance;
+  private httpAgent: HttpAgent;
+  private httpsAgent: HttpsAgent;
 
   constructor(apiKey: string, baseUrl: string = 'https://api.fish.audio') {
+    // Create custom agents that can be destroyed later
+    this.httpAgent = new HttpAgent({ keepAlive: true });
+    this.httpsAgent = new HttpsAgent({ keepAlive: true });
+    
     this.client = axios.create({
       baseURL: baseUrl,
       headers: {
         Authorization: `Bearer ${apiKey}`
       },
-      timeout: 0
+      timeout: 0,
+      httpAgent: this.httpAgent,
+      httpsAgent: this.httpsAgent
     });
 
     // Add response interceptor for error handling
@@ -20,79 +30,131 @@ export class Session {
       response => response,
       error => {
         if (error instanceof AxiosError && error.response) {
+          // Extract more detailed error information if available
+          const errorData = error.response.data;
+          let errorDetail = error.response.statusText;
+          
+          if (typeof errorData === 'string') {
+            errorDetail = errorData;
+          } else if (errorData && typeof errorData === 'object') {
+            errorDetail = errorData.detail || errorData.message || error.response.statusText;
+          }
+          
           throw new HttpCodeError(
             error.response.status,
-            error.response.data?.detail || error.response.statusText
+            errorDetail
           );
         }
         throw error;
       }
     );
   }
+  
+  /**
+   * Close all HTTP connections.
+   * Call this method when you're done using the Session to prevent memory leaks.
+   */
+  close(): void {
+    this.httpAgent.destroy();
+    this.httpsAgent.destroy();
+  }
 
-  async *tts(request: TTSRequest): AsyncGenerator<Buffer> {
-    const response = await this.client.post('/v1/tts', 
-      msgpack.encode(request.toJSON()),
-      { 
-        responseType: 'stream',
-        headers: {
-          'Content-Type': 'application/msgpack'
+  /**
+   * Perform text-to-speech synthesis
+   * @param request TTSRequest object with text and options
+   * @param additionalHeaders Optional additional headers to include in the request
+   * @returns AsyncGenerator yielding audio buffer chunks
+   */
+  async *tts(request: TTSRequest, additionalHeaders: Record<string, string> = {}): AsyncGenerator<Buffer> {
+    try {
+      // Log request details for debugging
+      const requestPayload = request.toJSON();
+      console.log('TTS Request:', JSON.stringify(requestPayload, null, 2));
+      console.log('TTS Headers:', JSON.stringify(additionalHeaders, null, 2));
+      
+      // Use JSON format instead of MessagePack
+      const response = await this.client.post('/v1/tts', 
+        requestPayload,  // Send as JSON
+        { 
+          responseType: 'stream',
+          headers: {
+            'Content-Type': 'application/json',  // Changed from msgpack to json
+            ...additionalHeaders
+          }
         }
-      }
-    );
+      );
 
-    for await (const chunk of response.data) {
-      yield Buffer.from(chunk);
+      for await (const chunk of response.data) {
+        yield Buffer.from(chunk);
+      }
+    } catch (error) {
+      if (error instanceof HttpCodeError) {
+        console.error(`TTS Error: ${error.status}: ${error.message}`);
+      } else {
+        console.error('TTS Error:', error instanceof Error ? error.message : error);
+      }
+      throw error;
     }
   }
 
   async asr(request: ASRRequest): Promise<ASRResponse> {
-    const response = await this.client.post('/v1/asr',
-      msgpack.encode(request.toJSON()),
-      {
-        headers: {
-          'Content-Type': 'application/msgpack'
+    try {
+      const response = await this.client.post('/v1/asr',
+        msgpack.encode(request.toJSON()),
+        {
+          headers: {
+            'Content-Type': 'application/msgpack'
+          }
         }
+      );
+      return ASRResponse.fromJSON(response.data);
+    } catch (error) {
+      if (error instanceof HttpCodeError) {
+        console.error(`ASR Error: ${error.status}: ${error.message}`);
+      } else {
+        console.error('ASR Error:', error instanceof Error ? error.message : error);
       }
-    );
-    return ASRResponse.fromJSON(response.data);
+      throw error;
+    }
   }
 
-  async listModels(params: {
-    pageSize?: number;
-    pageNumber?: number;
-    title?: string;
-    tag?: string | string[];
-    self?: boolean;
-    authorId?: string;
-    language?: string | string[];
-    titleLanguage?: string;
-    sortBy?: 'task_count' | 'created_at';
-  } = {}): Promise<PaginatedResponse<ModelEntity>> {
-    const response = await this.client.get('/model', { params });
-    return PaginatedResponse.fromJSON(response.data);
+  async listModels(params: ModelListParams = {}): Promise<PaginatedResponse<ModelEntity>> {
+    // Transform parameters to match API naming convention
+    const apiParams: Record<string, any> = {};
+    
+    if (params.pageSize !== undefined) apiParams.page_size = params.pageSize;
+    if (params.pageNumber !== undefined) apiParams.page_number = params.pageNumber;
+    if (params.title !== undefined) apiParams.title = params.title;
+    if (params.tag !== undefined) apiParams.tag = params.tag;
+    if (params.self !== undefined) apiParams.self = params.self;
+    if (params.authorId !== undefined) apiParams.author_id = params.authorId;
+    if (params.language !== undefined) apiParams.language = params.language;
+    if (params.titleLanguage !== undefined) apiParams.title_language = params.titleLanguage;
+    if (params.sortBy !== undefined) apiParams.sort_by = params.sortBy;
+    
+    const response = await this.client.get('/model', { params: apiParams });
+    
+    // Transform response items to ensure consistent ID field
+    const items = response.data.items.map((item: any) => ({
+      ...item,
+      id: item._id || item.id
+    }));
+    
+    return {
+      total: response.data.total,
+      items
+    };
   }
 
   async getModel(modelId: string): Promise<ModelEntity> {
     const response = await this.client.get(`/model/${modelId}`);
     return {
       ...response.data,
-      id: response.data._id
+      id: response.data._id || response.data.id
     };
   }
 
-  async createModel(params: {
-    visibility?: 'public' | 'unlist' | 'private';
-    type?: 'tts';
-    title: string;
-    description?: string;
-    coverImage?: Buffer;
-    trainMode?: 'fast';
-    voices: Buffer[];
-    texts?: string[];
-    tags?: string[];
-    enhanceAudioQuality?: boolean;
-  }): Promise<ModelEntity> {
+  async createModel(params: ModelCreateParams): Promise<ModelEntity> {
     const formData = new FormData();
     
     // Add file data
@@ -115,20 +177,17 @@ export class Session {
     formData.append('enhance_audio_quality', String(params.enhanceAudioQuality ?? true));
 
     const response = await this.client.post('/model', formData);
-    return response.data;
+    return {
+      ...response.data,
+      id: response.data._id || response.data.id
+    };
   }
 
   async deleteModel(modelId: string): Promise<void> {
     await this.client.delete(`/model/${modelId}`);
   }
 
-  async updateModel(modelId: string, params: {
-    title?: string;
-    description?: string;
-    coverImage?: Buffer;
-    visibility?: 'public' | 'unlist' | 'private';
-    tags?: string[];
-  }): Promise<void> {
+  async updateModel(modelId: string, params: ModelUpdateParams): Promise<void> {
     const formData = new FormData();
     
     if (params.coverImage) {
@@ -143,8 +202,14 @@ export class Session {
     await this.client.patch(`/model/${modelId}`, formData);
   }
 
-  async getApiCredit(): Promise<APICreditEntity> {
-    const response = await this.client.get('/wallet/self/api-credit');
+  async getApiCredit(params: ApiCreditParams = {}): Promise<APICreditEntity> {
+    const apiParams: Record<string, any> = {};
+    
+    if (params.checkFreeCredit !== undefined) {
+      apiParams.check_free_credit = params.checkFreeCredit;
+    }
+    
+    const response = await this.client.get('/wallet/self/api-credit', { params: apiParams });
     return response.data;
   }
 

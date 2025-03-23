@@ -1,4 +1,11 @@
 export { Session } from './session';
 export { WebSocketSession } from './websocket';
-export { HttpCodeError, WebSocketError } from './exceptions';
+export { 
+  HttpCodeError, 
+  WebSocketError, 
+  ApiError, 
+  AuthenticationError, 
+  PaymentRequiredError, 
+  NotFoundError 
+} from './exceptions';
 export * from './schemas'; 
