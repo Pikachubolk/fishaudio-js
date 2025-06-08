@@ -18,10 +18,13 @@ import { Session } from 'fish-audio-sdk';
 const session = new Session("your_api_key");
 ```
 
-You can change the endpoint if needed:
+You can change the endpoint and developer ID if needed:
 
 ```typescript
 const session = new Session("your_api_key", "https://your-proxy-domain");
+
+// Or specify a custom developer ID (defaults to My developer ID)
+const session = new Session("your_api_key", "https://api.fish.audio", "your_developer_id");
 ```
 
 Remember to clean up when you're done to prevent memory leaks:
@@ -30,6 +33,20 @@ Remember to clean up when you're done to prevent memory leaks:
 // Always close the session when done to clean up HTTP connections
 session.close();
 ```
+
+## Developer Program
+
+This SDK automatically includes a developer ID in all requests to support the [Fish Audio Developer Program](https://docs.fish.audio/developer-plan). By default, it uses Fish Audio's developer ID, but you can specify your own:
+
+```typescript
+// Uses default developer ID (Mine)
+const session = new Session("your_api_key");
+
+// Use your own developer ID to earn commissions
+const session = new Session("your_api_key", "https://api.fish.audio", "your_developer_id");
+```
+
+The developer ID is automatically added as a `developer-id` header to all API requests, allowing you to earn commissions when users consume Fish Audio services through your integration.
 
 ## Text to Speech (TTS)
 
@@ -87,6 +104,8 @@ For streaming text-to-speech in real-time:
 import { WebSocketSession, TTSRequest } from 'fish-audio-sdk';
 
 const ws = new WebSocketSession("your_api_key");
+// Or with custom endpoint and developer ID:
+// const ws = new WebSocketSession("your_api_key", "wss://your-proxy-domain", "your_developer_id");
 
 try {
   async function* textStream() {

@@ -8,7 +8,8 @@ export class WebSocketSession {
 
   constructor(
     private apiKey: string, 
-    private baseUrl: string = 'https://api.fish.audio'
+    private baseUrl: string = 'https://api.fish.audio',
+    private developerId: string = '6322d9df15d044e7b928de27c863480f'
   ) {}
 
   async close() {
@@ -24,7 +25,10 @@ export class WebSocketSession {
 
   async *tts(request: TTSRequest, textStream: AsyncIterable<string>): AsyncGenerator<Buffer> {
     const ws = new WebSocket(`${this.baseUrl}/v1/tts/live`, {
-      headers: { Authorization: `Bearer ${this.apiKey}` }
+      headers: { 
+        Authorization: `Bearer ${this.apiKey}`,
+        'developer-id': this.developerId
+      }
     });
 
     this.activeConnections.add(ws);

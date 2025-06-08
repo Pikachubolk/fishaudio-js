@@ -1,5 +1,3 @@
-import { z } from 'zod';
-
 export interface ASRSegment {
   text: string;
   start: number;

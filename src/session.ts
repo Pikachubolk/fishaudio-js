@@ -10,7 +10,11 @@ export class Session {
   private httpAgent: HttpAgent;
   private httpsAgent: HttpsAgent;
 
-  constructor(apiKey: string, baseUrl: string = 'https://api.fish.audio') {
+  constructor(
+    apiKey: string, 
+    baseUrl: string = 'https://api.fish.audio',
+    developerId: string = '6322d9df15d044e7b928de27c863480f'
+  ) {
     // Create custom agents that can be destroyed later
     this.httpAgent = new HttpAgent({ keepAlive: true });
     this.httpsAgent = new HttpsAgent({ keepAlive: true });
@@ -18,7 +22,8 @@ export class Session {
     this.client = axios.create({
       baseURL: baseUrl,
       headers: {
-        Authorization: `Bearer ${apiKey}`
+        Authorization: `Bearer ${apiKey}`,
+        'developer-id': developerId
       },
       timeout: 0,
       httpAgent: this.httpAgent,
@@ -218,5 +223,4 @@ export class Session {
     return response.data;
   }
 
-  // ... other methods matching Python implementation
 } 

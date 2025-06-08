@@ -9,7 +9,7 @@ function parseApiKey(key: string | undefined): string {
 }
 
 // Skip tests if no valid API key
-const apiKey = parseApiKey(process.env.APIKEY);
+const apiKey = parseApiKey(process.env.FISHAUDIO_KEY || process.env.APIKEY);
 const hasApiKey = !!apiKey && apiKey.length > 10;
 const runApiTests = hasApiKey ? describe : describe.skip;
 
